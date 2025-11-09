@@ -17,3 +17,5 @@ def get_fish(): return load_parquet("fish")
 def get_transactions(): return load_parquet("transactions")
 def get_fish_locations(): return load_parquet("fish_locations")
 def get_trans(): return load_parquet("trans")
+def get_pings(): return load_parquet("pings")
+
