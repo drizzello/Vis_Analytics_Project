@@ -1,0 +1,117 @@
+.question-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 2rem clamp(1.25rem, 4vw, 3.5rem);
+    background: #edf5f9;
+    gap: 1.5rem;
+    box-sizing: border-box;
+}
+
+.question-card {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: clamp(1.75rem, 3vw, 2.75rem);
+    box-shadow: 0 16px 45px rgba(15, 23, 42, 0.12);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.question-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.question-title {
+    max-width: 640px;
+}
+
+.question-eyebrow {
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    color: #0284c7;
+    letter-spacing: 0.15em;
+    margin-bottom: 0.5rem;
+}
+
+.question-card h1 {
+    font-size: clamp(1.8rem, 3vw, 2.4rem);
+    margin: 0;
+    color: #0f172a;
+}
+
+.question-card p {
+    color: #475569;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.question-nav {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.nav-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0.65rem 1.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.nav-button.primary {
+    background: linear-gradient(120deg, #0e7490, #0284c7);
+    color: #ffffff;
+    box-shadow: 0 12px 25px rgba(2, 132, 199, 0.35);
+}
+
+.nav-button.ghost {
+    border: 1px solid rgba(14, 116, 144, 0.4);
+    color: #0e7490;
+    background: transparent;
+}
+
+.nav-button:hover {
+    transform: translateY(-2px);
+}
+
+@media (max-width: 900px) {
+    .question-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .question-nav {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .nav-button {
+        flex: 1 1 auto;
+        min-width: 180px;
+    }
+}
+
+@media (max-width: 640px) {
+    .question-card {
+        padding: 2rem;
+    }
+
+    .nav-button {
+        width: 100%;
+        justify-content: center;
+    }
+}
