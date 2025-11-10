@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from datetime import timedelta
 import pandas as pd
+import numpy as np
 from .data_loader import get_dwell_dynamic, get_vessels, get_transactions, get_fish, get_fish_locations, get_pings
 
 
@@ -60,8 +61,7 @@ def get_daily_view(port: str, date: str):
 
     selected_port = port
     selected_date = pd.Timestamp(date)
-    arrival_date = selected_date - pd.Timedelta(days=1)
-
+    arrival_date = selected_date 
     dwell_dynamic["arrival_time"] = pd.to_datetime(dwell_dynamic["arrival_time"])
     dwell_dynamic = dwell_dynamic[
         (dwell_dynamic["arrival_time"].dt.date == arrival_date.date()) &
@@ -87,7 +87,7 @@ def get_daily_view(port: str, date: str):
         .assign(
             dwell=lambda x: x["dwell"].astype(float),
             tonnage=lambda x: x["tonnage"].astype(float),
-            arrival_time=lambda x: x["arrival_time"].astype(str)  # 👈 conversione chiave
+            arrival_time=lambda x: x["arrival_time"].astype(str) 
         )
         .to_dict(orient="records")
     )
@@ -108,7 +108,7 @@ def get_daily_view(port: str, date: str):
 @app.get("/api/daily_exports_view")
 def get_daily_exports(port: str, date: str):
     try:
-        trans = get_transactions()  # your parquet loader
+        trans = get_transactions()  
         fish = get_fish()
         selected_date = (pd.to_datetime(date) + pd.Timedelta(days=1)).date()
 
@@ -136,7 +136,7 @@ def get_daily_exports(port: str, date: str):
         })
         daily_exports["date"] = daily_exports["date"].astype(str)
         selected_date = str(selected_date)
-        # Convert to JSON-safe list of dicts
+
 
         daily_exports_json = daily_exports.to_dict(orient="records")
 
@@ -166,8 +166,8 @@ def get_vessel_catch(port: str, date: str):
 
         # --- Parametri di riferimento ---
         selected_port = port
-        selected_date = pd.Timestamp(date)
-        arrival_date = selected_date - pd.Timedelta(days=1)
+        selected_date = pd.Timestamp(date) + pd.Timedelta(days=1)
+        arrival_date = selected_date 
 
 
         dwell_dynamic["arrival_time"] = pd.to_datetime(dwell_dynamic["arrival_time"])
@@ -187,7 +187,7 @@ def get_vessel_catch(port: str, date: str):
             [["cargo_id", "fish_id", "exports_tons", "target_harbor", "date"]]
         )
 
-        # Nome del pesce
+
         id_to_name = dict(zip(fish["id"], fish["entity_name"]))
         daily_exports["fish_name"] = daily_exports["fish_id"].map(id_to_name)
         illegal_fishes = ["Sockfish/Pisces foetida", "Offidiaa/Piscis osseus", "Helenaa/Pisces satis"]
@@ -284,9 +284,8 @@ def get_vessel_routine(vessel: str):
     includes start/end times, area kind, and visited sources.
     """
     try:
-        ping = get_pings()  # or get_ping() if available
+        ping = get_pings() 
 
-        # --- Filter for selected vessel ---
         print(ping)
         df_vessel = ping[ping["target"] == vessel].copy()
         print(df_vessel)
@@ -297,13 +296,11 @@ def get_vessel_routine(vessel: str):
                 "message": "No records found for this vessel."
             })
 
-        # --- Sort chronologically & compute start-end intervals ---
         df_vessel["time"] = pd.to_datetime(df_vessel["time"])
         df_vessel = df_vessel.sort_values("time")
         df_vessel["start"] = df_vessel["time"]
         df_vessel["end"] = df_vessel["time"] + pd.to_timedelta(df_vessel["dwell"], unit="s")
 
-        # --- Classify kind ---
         def classify_kind(k):
             if "Preserve" in k or "Reserve" in k:
                 return "Ecological Preserve"
@@ -318,10 +315,8 @@ def get_vessel_routine(vessel: str):
 
         df_vessel["kind"] = df_vessel["kind"].apply(classify_kind)
 
-        # --- Clean up relevant fields ---
         df_vessel = df_vessel[["source", "kind", "start", "end"]]
 
-        # --- Convert to JSON-safe ---
         segments_json = df_vessel.assign(
             start=lambda x: x["start"].astype(str),
             end=lambda x: x["end"].astype(str)
@@ -335,5 +330,179 @@ def get_vessel_routine(vessel: str):
 
     except Exception as e:
         import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/dwell_comparison_view")
+def get_dwell_comparison(vessel: str = None):
+    """
+    Restituisce dwell medio e safe zone per ciascuna location.
+    La safe zone è calcolata come [25° percentile, 75° percentile] (più robusta della std).
+    """
+    import numpy as np
+    import pandas as pd
+    from fastapi.responses import JSONResponse
+
+    try:
+        ping = get_pings()
+        ping["time"] = pd.to_datetime(ping["time"], errors="coerce")
+
+        if not {"source", "target", "dwell"}.issubset(ping.columns):
+            raise ValueError("Ping dataset must contain 'source', 'target' and 'dwell' columns")
+
+        baseline = (
+            ping.groupby("source")["dwell"]
+            .agg(
+                mean_dwell="mean",
+                q25=lambda x: np.nanpercentile(x, 25),
+                q75=lambda x: np.nanpercentile(x, 75),
+                count="count"
+            )
+            .reset_index()
+            .rename(columns={"source": "location_name"})
+        )
+
+        baseline["safe_low"] = baseline["q25"].clip(lower=0)
+        baseline["safe_high"] = baseline["q75"]
+
+        vessel_data = None
+        if vessel and vessel.strip():
+            vessel_df = ping[ping["target"] == vessel]
+            vessel_data = (
+                vessel_df.groupby("source")["dwell"]
+                .mean()
+                .reset_index()
+                .rename(columns={"source": "location_name", "dwell": "vessel_dwell"})
+            )
+
+
+        merged = baseline.copy()
+        if vessel_data is not None and not vessel_data.empty:
+            merged = merged.merge(vessel_data, on="location_name", how="left", validate="one_to_one")
+        else:
+            merged["vessel_dwell"] = np.nan
+
+
+        merged = merged.replace([np.inf, -np.inf], np.nan).replace({np.nan: None})
+
+        json_data = merged.to_dict(orient="records")
+
+        return JSONResponse({
+            "num_locations": len(merged),
+            "has_vessel": bool(vessel and vessel.strip()),
+            "vessel": vessel or None,
+            "dwell_comparison": json_data,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/dwell_location_view")
+def get_dwell_location_view(
+    location: str,
+    vessel: str = None,
+):
+    """
+    Restituisce dwell medio, quantili e confronto con eventuale nave specifica
+    limitandosi alle location richieste (separate da virgola) e, opzionalmente,
+    a una nave specificata.
+    """
+    try:
+        ping = get_pings()
+        ping["time"] = pd.to_datetime(ping["time"], errors="coerce")
+
+        required_cols = {"source", "target", "dwell", "kind"}
+        missing = required_cols - set(ping.columns)
+        if missing:
+            raise ValueError(f"Ping dataset missing required columns: {missing}")
+
+        def classify_kind(k):
+            if isinstance(k, str):
+                if "Preserve" in k or "Reserve" in k:
+                    return "Protected"
+                if "Fishing" in k or "Shelf" in k:
+                    return "Non-protected"
+            return "Transit / Other"
+
+        ping["area_type"] = ping["kind"].apply(classify_kind)
+
+        selected_locations = [loc.strip() for loc in location.split(",") if loc.strip()]
+        if not selected_locations:
+            raise ValueError("Parameter 'location' must include at least one value.")
+
+        ping = ping[ping["source"].isin(selected_locations)]
+
+        if ping.empty:
+            stats = pd.DataFrame(
+                columns=[
+                    "location_name",
+                    "area_type",
+                    "mean_dwell",
+                    "q25",
+                    "q75",
+                    "count",
+                    "safe_low",
+                    "safe_high",
+                ]
+            )
+        else:
+            stats = (
+                ping.groupby(["source", "area_type"])["dwell"]
+                .agg(
+                    mean_dwell="mean",
+                    q25=lambda x: np.nanpercentile(x, 25),
+                    q75=lambda x: np.nanpercentile(x, 75),
+                    count="count",
+                )
+                .reset_index()
+                .rename(columns={"source": "location_name"})
+            )
+            stats["safe_low"] = stats["q25"].clip(lower=0)
+            stats["safe_high"] = stats["q75"]
+
+        vessel_data = None
+        if vessel and vessel.strip():
+            vessel_df = ping[ping["target"] == vessel]
+            if not vessel_df.empty:
+                vessel_data = (
+                    vessel_df.groupby("source")["dwell"]
+                    .mean()
+                    .reset_index()
+                    .rename(
+                        columns={
+                            "source": "location_name",
+                            "dwell": "vessel_dwell",
+                        }
+                    )
+                )
+
+        merged = stats.copy()
+        if vessel_data is not None and not vessel_data.empty:
+            merged = merged.merge(
+                vessel_data, on="location_name", how="left", validate="one_to_one"
+            )
+        else:
+            merged["vessel_dwell"] = np.nan
+
+        merged = merged.replace([np.inf, -np.inf], np.nan).replace({np.nan: None})
+        json_data = merged.to_dict(orient="records")
+
+        return JSONResponse(
+            {
+                "num_locations": len(json_data),
+                "selected_locations": selected_locations,
+                "has_vessel": bool(vessel and vessel.strip()),
+                "vessel": vessel or None,
+                "dwell_summary": json_data,
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
