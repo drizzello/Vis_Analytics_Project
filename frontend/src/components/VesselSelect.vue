@@ -1,5 +1,5 @@
 <script setup>
-import { vessels, selectedVessel } from "@/stores/useFilters.js";
+import { vessels, selectedVessel } from "@/stores/usefilters.js";
 </script>
 
 <template>

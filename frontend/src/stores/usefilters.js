@@ -26,5 +26,5 @@ export async function fetchFilters() {
   // --- Default values ---
   selectedPort.value = ports.value[0] || "";
   selectedDate.value = dates.value[0] || "";
-  selectedVessel.value = vessels.value[0] || ""; // 🆕 default vessel
+  selectedVessel.value = vessels.value[0] || ""; 
 }
