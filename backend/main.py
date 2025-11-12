@@ -21,6 +21,14 @@ app.add_middleware(
 )
 
 
+def _classify_kind(k):
+    if isinstance(k, str):
+        if "Preserve" in k or "Reserve" in k:
+            return "Protected"
+        if "Fishing" in k or "Shelf" in k:
+            return "Non-protected"
+    return "Transit / Other"
+
 
 
 @app.get("/")
@@ -39,6 +47,11 @@ def get_vessels_list():
     vessels = sorted(dwell_dynamic["vessel_name"].dropna().unique().tolist())
     return {"vessels": vessels}
 
+@app.get("/api/locations")
+def get_locations_list():
+    pings = get_pings()
+    locations = sorted(pings["source"].dropna().unique().tolist())
+    return {"locations": locations}
 
 
 @app.get("/api/dates")
@@ -60,7 +73,7 @@ def get_daily_view(port: str, date: str):
     vessels = get_vessels()
 
     selected_port = port
-    selected_date = pd.Timestamp(date)
+    selected_date = pd.Timestamp(date) - pd.Timedelta(days=1)
     arrival_date = selected_date 
     dwell_dynamic["arrival_time"] = pd.to_datetime(dwell_dynamic["arrival_time"])
     dwell_dynamic = dwell_dynamic[
@@ -110,26 +123,20 @@ def get_daily_exports(port: str, date: str):
     try:
         trans = get_transactions()  
         fish = get_fish()
-        selected_date = (pd.to_datetime(date) + pd.Timedelta(days=1)).date()
+        selected_date = pd.to_datetime(date)
 
-        # Filter exports for that port & date
         daily_exports = (
-            trans[(trans["target_harbor"] == port)]
-            .groupby(["date", "fish_id"], as_index=False)["qty_tons"]
-            .sum()
-            .rename(columns={"qty_tons": "exports_tons"})
+        trans[(trans["target_harbor"] == port) &
+            (trans["date"].dt.date == selected_date.date())]
+        .rename(columns={"source": "cargo_id", "qty_tons": "exports_tons"})
+        [["cargo_id", "fish_id", "exports_tons", "target_harbor", "date"]]
         )
-        print(daily_exports)
-        daily_exports = daily_exports[
-            pd.to_datetime(daily_exports["date"]).dt.date == selected_date
-        ]        
         id_to_name = dict(zip(fish["id"], fish["entity_name"]))
 
         daily_exports["fish_name"] = daily_exports["fish_id"].map(id_to_name)
         illegal_fishes = ["Sockfish/Pisces foetida", "Offidiaa/Piscis osseus", "Helenaa/Pisces satis"]
 
         daily_exports["is_prohibited"] = daily_exports["fish_name"].isin(illegal_fishes)
-        print(daily_exports)
         daily_exports = daily_exports.astype({
             "fish_id": "string",
             "exports_tons": "float"
@@ -166,16 +173,16 @@ def get_vessel_catch(port: str, date: str):
 
         # --- Parametri di riferimento ---
         selected_port = port
-        selected_date = pd.Timestamp(date) + pd.Timedelta(days=1)
-        arrival_date = selected_date 
+        selected_date = pd.Timestamp(date) 
+        arrival_date = selected_date  - pd.Timedelta(days=1)
 
 
         dwell_dynamic["arrival_time"] = pd.to_datetime(dwell_dynamic["arrival_time"])
         dwell_dynamic = dwell_dynamic[
-            (dwell_dynamic["arrival_time"].dt.date == arrival_date.date()) &
+            (dwell_dynamic["arrival_time"].dt.date == arrival_date.date()
+            ) &
             (dwell_dynamic["arrival_port"] == selected_port)
         ].copy()
-
         vessel_info = vessels[["vessel_id", "tonnage"]].rename(columns={"vessel_id": "vessel_name"})
         dwell_dynamic = dwell_dynamic.merge(vessel_info, on="vessel_name", how="left")
 
@@ -186,8 +193,6 @@ def get_vessel_catch(port: str, date: str):
             .rename(columns={"source": "cargo_id", "qty_tons": "exports_tons"})
             [["cargo_id", "fish_id", "exports_tons", "target_harbor", "date"]]
         )
-
-
         id_to_name = dict(zip(fish["id"], fish["entity_name"]))
         daily_exports["fish_name"] = daily_exports["fish_id"].map(id_to_name)
         illegal_fishes = ["Sockfish/Pisces foetida", "Offidiaa/Piscis osseus", "Helenaa/Pisces satis"]
@@ -195,7 +200,8 @@ def get_vessel_catch(port: str, date: str):
         daily_exports["is_prohibited"] = daily_exports["fish_name"].isin(illegal_fishes)
 
 
-        def estimate_vessel_catch_by_habitat_with_cargo(daily_exports, dwell_dynamic, fish_locations):
+
+        def _estimate_vessel_catch_by_habitat_with_cargo(daily_exports, dwell_dynamic, fish_locations):
             results = []
             if daily_exports.empty or dwell_dynamic.empty:
                 return pd.DataFrame(columns=[
@@ -211,6 +217,7 @@ def get_vessel_catch(port: str, date: str):
 
             for _, row in daily_exports.iterrows():
                 fish_name = row["fish_name"]
+
                 exports_tons = row["exports_tons"]
                 cargo_id = row["cargo_id"]
                 is_prohibited = row["is_prohibited"]
@@ -238,17 +245,17 @@ def get_vessel_catch(port: str, date: str):
                 )
 
             if results:
-                return pd.concat(results, ignore_index=True)
+                df = pd.concat(results, ignore_index=True)
+                return df
             else:
                 return pd.DataFrame(columns=[
                     "cargo_id", "vessel_name", "fish_name", "location_name",
                     "dwell", "tonnage", "estimated_tons", "is_prohibited"
                 ])
 
-        vessel_catch = estimate_vessel_catch_by_habitat_with_cargo(
+        vessel_catch = _estimate_vessel_catch_by_habitat_with_cargo(
             daily_exports, dwell_dynamic, fish_locations
         )
-
         # Aggiungi percentuali per cargo_id
         vessel_catch["share_percent"] = (
             vessel_catch.groupby("cargo_id")["estimated_tons"]
@@ -286,9 +293,7 @@ def get_vessel_routine(vessel: str):
     try:
         ping = get_pings() 
 
-        print(ping)
         df_vessel = ping[ping["target"] == vessel].copy()
-        print(df_vessel)
         if df_vessel.empty:
             return JSONResponse({
                 "vessel": vessel,
@@ -301,19 +306,8 @@ def get_vessel_routine(vessel: str):
         df_vessel["start"] = df_vessel["time"]
         df_vessel["end"] = df_vessel["time"] + pd.to_timedelta(df_vessel["dwell"], unit="s")
 
-        def classify_kind(k):
-            if "Preserve" in k or "Reserve" in k:
-                return "Ecological Preserve"
-            elif "Fishing" in k or "Shelf" in k or "Ground" in k:
-                return "Fishing Ground"
-            elif "City" in k or "Harbor" in k:
-                return "city"
-            elif "Buoy" in k:
-                return "buoy"
-            else:
-                return "Other"
 
-        df_vessel["kind"] = df_vessel["kind"].apply(classify_kind)
+        df_vessel["kind"] = df_vessel["kind"].apply(_classify_kind)
 
         df_vessel = df_vessel[["source", "kind", "start", "end"]]
 
@@ -420,15 +414,7 @@ def get_dwell_location_view(
         if missing:
             raise ValueError(f"Ping dataset missing required columns: {missing}")
 
-        def classify_kind(k):
-            if isinstance(k, str):
-                if "Preserve" in k or "Reserve" in k:
-                    return "Protected"
-                if "Fishing" in k or "Shelf" in k:
-                    return "Non-protected"
-            return "Transit / Other"
-
-        ping["area_type"] = ping["kind"].apply(classify_kind)
+        ping["area_type"] = ping["kind"].apply(_classify_kind)
 
         selected_locations = [loc.strip() for loc in location.split(",") if loc.strip()]
         if not selected_locations:
@@ -506,3 +492,44 @@ def get_dwell_location_view(
 
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/weekly_dwell")
+def get_weekly_dwell(location: str | None = None):
+    """
+    Returns the average dwell per location, aggregated by calendar day.
+    Optional query param 'location' filters to a specific location.
+    """
+
+    ping = get_pings()
+    ping["time"] = pd.to_datetime(ping["time"], errors="coerce")
+    ping["date"] = ping["time"].dt.date
+
+    # --- Optional filter ---
+    if location:
+        ping = ping[ping["source"] == location]
+
+    # --- Validate required columns ---
+    if not {"source", "dwell", "date"}.issubset(ping.columns):
+        raise ValueError("Ping dataset must contain 'source', 'dwell', and 'date' columns")
+
+    # --- Aggregate by day ---
+    daily_avg = (
+        ping.groupby(["date", "source"])["dwell"]
+        .mean()
+        .reset_index()
+        .rename(columns={"source": "location_name", "dwell": "avg_dwell"})
+        .sort_values(["date"])
+    )
+
+    daily_avg["avg_dwell"] = daily_avg["avg_dwell"].round(2)
+    daily_avg["date"] = daily_avg["date"].astype(str)
+
+    result = []
+    for loc, group in daily_avg.groupby("location_name"):
+        result.append({
+            "location_name": loc,
+            "dates": group["date"].tolist(),
+            "avg_dwell": group["avg_dwell"].tolist()
+        })
+
+    return {"data": result}

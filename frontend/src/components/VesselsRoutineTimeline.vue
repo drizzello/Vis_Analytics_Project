@@ -58,20 +58,31 @@ function renderChart() {
     .append("g")
     .attr("transform", `translate(${margin.left},${margin.top})`);
 
-  const kinds = ["Fishing Ground", "Ecological Preserve", "City", "Buoy", "Other"];
-  const color = d3
-    .scaleOrdinal()
-    .domain(kinds)
-    .range(["#22c55e", "#ef4444", "#6366f1", "#0ea5e9", "#94a3b8"]);
-
-  const activeKinds = new Set(kinds);
-
   const allData = compareMode.value
     ? [
         ...data.value.map((d) => ({ ...d, series: "selected" })),
         ...comparisonData.value.map((d) => ({ ...d, series: "comparison" })),
       ]
     : data.value.map((d) => ({ ...d, series: "selected" }));
+
+  const kinds = (() => {
+    const detected = Array.from(new Set(allData.map((d) => d.kind))).filter(Boolean);
+    return detected.length ? detected : ["Other"];
+  })();
+  const fixedColors = {
+    Protected: "#ef4444",
+    "Transit / Other": "#94a3b8",
+  };
+  const palette = ["#22c55e", "#0ea5e9", "#6366f1", "#f97316", "#10b981"];
+  const assignedColors = kinds.map(
+    (kind, idx) => fixedColors[kind] || palette[idx % palette.length]
+  );
+  const color = d3
+    .scaleOrdinal()
+    .domain(kinds)
+    .range(assignedColors);
+
+  const activeKinds = new Set(kinds);
 
   const xDomain = d3.extent(allData.flatMap((d) => [d.start, d.end]));
   if (!xDomain[0] || !xDomain[1]) return;

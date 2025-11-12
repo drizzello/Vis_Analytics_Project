@@ -21,8 +21,8 @@ onMounted(() => {
         </div>
         <div class="question-nav">
           <RouterLink class="nav-button ghost" to="/question1">← Back to Question 1</RouterLink>
-          <RouterLink class="nav-button primary" to="/question2">
-            Continue the Investigation →
+          <RouterLink class="nav-button primary" to="/">
+            End the Investigation →
           </RouterLink>
         </div>
       </header>

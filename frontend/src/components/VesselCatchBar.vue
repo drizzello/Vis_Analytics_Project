@@ -35,6 +35,9 @@ async function fetchData() {
   renderChart();
 }
 
+const isProhibited = (d) =>
+  d.is_prohibited === true || d.is_prohibited === "True" || d.is_prohibited === "true";
+
 function renderChart() {
   const svg = d3.select(chartRef.value);
   svg.selectAll("*").remove();
@@ -68,7 +71,7 @@ function renderChart() {
     .padding(0.2);
 
   // --- Color rule ---
-  const color = (d) => (d.is_prohibited === "True" ? "#e11d48" : "#2196F3");
+  const color = (d) => (isProhibited(d) ? "#e11d48" : "#2196F3");
 
   // --- Axes ---
   chart.append("g")
@@ -96,7 +99,7 @@ function renderChart() {
     .text(
       (d) =>
         `${d.vessel_name}\n${d.fish_name}\nShare: ${d.share_percent.toFixed(1)}%\nEstimated: ${d.estimated_tons.toFixed(1)} tons\n${
-          d.is_prohibited === "True"
+          isProhibited(d)
             ? "🚫 Prohibited species"
             : "✔️ Legal species"
         }`
