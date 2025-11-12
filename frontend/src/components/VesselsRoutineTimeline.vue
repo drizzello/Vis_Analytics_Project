@@ -70,6 +70,7 @@ function renderChart() {
   })();
   const fixedColors = {
     Protected: "#ef4444",
+    "Non-protected": "#2196F3",
     "Transit / Other": "#94a3b8",
   };
   const palette = ["#22c55e", "#0ea5e9", "#6366f1", "#f97316", "#10b981"];
