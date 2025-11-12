@@ -10,7 +10,6 @@ const cargoIds = ref([]);
 const selectedCargo = ref("");
 const hasData = ref(true);
 
-// --- Fetch vessel catch data ---
 async function fetchData() {
   if (!selectedPort.value || !selectedDate.value) return;
 

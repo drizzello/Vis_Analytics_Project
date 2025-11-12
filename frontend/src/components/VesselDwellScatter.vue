@@ -8,7 +8,6 @@ const chartRef = ref(null);
 const data = ref([]);
 const hasData = ref(true);
 
-// --- Fetch chart data for current port/date ---
 async function fetchData() {
   if (!selectedPort.value || !selectedDate.value) return;
 
@@ -19,7 +18,7 @@ async function fetchData() {
   data.value = json.scatter_data || [];
   hasData.value = data.value.length > 0;
   
-  await nextTick(); // 👈 assicura che Vue aggiorni i refs
+  await nextTick(); 
   renderChart();
 }
 
@@ -44,7 +43,6 @@ function renderChart() {
 
   if (!data.value.length) return;
 
-  // --- CATEGORY COLORS (Protected → RED)
   const categories = ["Protected", "Non-protected", "Transit / Other"];
   const color = d3
     .scaleOrdinal()

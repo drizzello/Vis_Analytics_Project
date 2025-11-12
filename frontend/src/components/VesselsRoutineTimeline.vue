@@ -12,7 +12,6 @@ const compareMode = ref(false);
 
 const comparisonVessel = "snappersnatcher7be";
 
-// === Fetch routine data ===
 async function fetchData(vessel) {
   const res = await fetch(
     `http://127.0.0.1:8000/api/vessel_routine_view?vessel=${encodeURIComponent(vessel)}`

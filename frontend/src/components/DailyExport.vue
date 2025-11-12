@@ -8,7 +8,6 @@ const chartRef = ref(null);
 const data = ref([]);
 const hasData = ref(true);
 
-// --- Fetch chart data for current port/date ---
 async function fetchData() {
   if (!selectedPort.value || !selectedDate.value) return;
 
@@ -23,7 +22,7 @@ async function fetchData() {
   renderChart();
 }
 
-// --- Draw the D3 bar chart ---
+// --- D3 ---
 function renderChart() {
   const svgEl = chartRef.value;
   d3.select(svgEl).selectAll("*").remove(); // clear previous chart

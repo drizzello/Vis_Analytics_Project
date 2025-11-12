@@ -12,7 +12,7 @@ onMounted(() => {
 
 <template>
   <section class="question-page">
-    <!-- INTRO -->
+
     <article class="question-card question-card--intro">
       <header class="question-header">
         <div class="question-title">
@@ -27,11 +27,9 @@ onMounted(() => {
         </div>
       </header>
 
-      <!-- ⚓️ Custom Filter: Vessel Only -->
       <PageFilters :show-port="false" :show-date="false" :show-vessel="true" />
     </article>
 
-    <!-- TIMELINE VISUALIZATION -->
     <article class="question-card question-card--visual">
       <div class="question-section-heading">
         <div>
