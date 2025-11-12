@@ -29,8 +29,8 @@ function renderChart() {
 
   if (!hasData.value) return;
 
-  const margin = { top: 50, right: 40, bottom: 100, left: 80 },
-    width = 800 - margin.left - margin.right,
+  const margin = { top: 50, right: 200, bottom: 100, left: 80 },
+    width = 1100 - margin.left - margin.right,
     height = 500 - margin.top - margin.bottom;
 
   const svg = d3
@@ -110,7 +110,7 @@ function renderChart() {
     );
 
   // --- Legend ---
-  const legend = svg.append("g").attr("transform", `translate(${width - 160}, -20)`);
+  const legend = svg.append("g").attr("transform", `translate(${width + 40}, 0)`);
 
   const legendItems = [
     { label: "Legal fish", color: "#2196F3" },

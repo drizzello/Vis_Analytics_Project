@@ -84,14 +84,7 @@ def get_daily_view(port: str, date: str):
     vessel_info = vessels[["vessel_id", "tonnage"]].rename(columns={"vessel_id": "vessel_name"})
     dwell_dynamic = dwell_dynamic.merge(vessel_info, on="vessel_name", how="left")
 
-    def classify_kind(k):
-        if "Preserve" in k or "Reserve" in k:
-            return "Protected"
-        elif "Fishing" in k or "Shelf" in k:
-            return "Non-protected"
-        else:
-            return "Transit / Other"
-    dwell_dynamic["area_type"] = dwell_dynamic["kind"].apply(classify_kind)
+    dwell_dynamic["area_type"] = dwell_dynamic["kind"].apply(_classify_kind)
 
     scatter_data = (
         dwell_dynamic[[
@@ -110,9 +103,9 @@ def get_daily_view(port: str, date: str):
         "num_locations": int(dwell_dynamic["location_name"].nunique()),
         "total_dwell": float(dwell_dynamic["dwell"].sum())
     }
-
+    data_str = str(selected_date)
     return JSONResponse({
-        "date": date,
+        "date": data_str,
         "port": port,
         "summary": summary,
         "scatter_data": scatter_data
@@ -164,14 +157,14 @@ def get_daily_exports(port: str, date: str):
 @app.get("/api/vessel_catch_view")
 def get_vessel_catch(port: str, date: str):
     try:
-        # --- Carica i dataset ---
+
         dwell_dynamic = get_dwell_dynamic()
         vessels = get_vessels()
         trans = get_transactions()
         fish = get_fish()
         fish_locations = get_fish_locations()
 
-        # --- Parametri di riferimento ---
+
         selected_port = port
         selected_date = pd.Timestamp(date) 
         arrival_date = selected_date  - pd.Timedelta(days=1)
@@ -256,13 +249,13 @@ def get_vessel_catch(port: str, date: str):
         vessel_catch = _estimate_vessel_catch_by_habitat_with_cargo(
             daily_exports, dwell_dynamic, fish_locations
         )
+
         # Aggiungi percentuali per cargo_id
         vessel_catch["share_percent"] = (
             vessel_catch.groupby("cargo_id")["estimated_tons"]
             .transform(lambda x: 100 * x / x.sum())
         )
 
-        # Serializza per JSON
         vessel_catch_json = vessel_catch.assign(
             dwell=lambda x: x["dwell"].astype(float),
             tonnage=lambda x: x["tonnage"].astype(float),
@@ -286,10 +279,7 @@ def get_vessel_catch(port: str, date: str):
 
 @app.get("/api/vessel_routine_view")
 def get_vessel_routine(vessel: str):
-    """
-    Returns the chronological routine of a selected vessel:
-    includes start/end times, area kind, and visited sources.
-    """
+
     try:
         ping = get_pings() 
 
@@ -330,14 +320,6 @@ def get_vessel_routine(vessel: str):
 
 @app.get("/api/dwell_comparison_view")
 def get_dwell_comparison(vessel: str = None):
-    """
-    Restituisce dwell medio e safe zone per ciascuna location.
-    La safe zone è calcolata come [25° percentile, 75° percentile] (più robusta della std).
-    """
-    import numpy as np
-    import pandas as pd
-    from fastapi.responses import JSONResponse
-
     try:
         ping = get_pings()
         ping["time"] = pd.to_datetime(ping["time"], errors="coerce")
@@ -400,11 +382,7 @@ def get_dwell_location_view(
     location: str,
     vessel: str = None,
 ):
-    """
-    Restituisce dwell medio, quantili e confronto con eventuale nave specifica
-    limitandosi alle location richieste (separate da virgola) e, opzionalmente,
-    a una nave specificata.
-    """
+
     try:
         ping = get_pings()
         ping["time"] = pd.to_datetime(ping["time"], errors="coerce")
@@ -495,24 +473,17 @@ def get_dwell_location_view(
 
 @app.get("/api/weekly_dwell")
 def get_weekly_dwell(location: str | None = None):
-    """
-    Returns the average dwell per location, aggregated by calendar day.
-    Optional query param 'location' filters to a specific location.
-    """
 
     ping = get_pings()
     ping["time"] = pd.to_datetime(ping["time"], errors="coerce")
     ping["date"] = ping["time"].dt.date
 
-    # --- Optional filter ---
     if location:
         ping = ping[ping["source"] == location]
 
-    # --- Validate required columns ---
     if not {"source", "dwell", "date"}.issubset(ping.columns):
         raise ValueError("Ping dataset must contain 'source', 'dwell', and 'date' columns")
 
-    # --- Aggregate by day ---
     daily_avg = (
         ping.groupby(["date", "source"])["dwell"]
         .mean()
