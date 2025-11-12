@@ -1,7 +1,7 @@
 <script setup>
 import * as d3 from "d3";
 import { ref, onMounted, watch } from "vue";
-import { selectedVessel } from "@/stores/useFilters.js";
+import { selectedVessel } from "@/stores/usefilters.js";
 import EmptyStateMessage from "@/components/EmptyStateMessage.vue";
 
 const chartRef = ref(null);
